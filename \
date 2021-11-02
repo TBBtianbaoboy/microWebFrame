@@ -1,0 +1,88 @@
+package kua
+
+import (
+	"fmt"
+	//"encoding/json"
+
+	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
+)
+
+type User struct {
+	Id     bson.ObjectId `bson:"_id"`
+	Name   string        `bson:"username"`
+	Passwd string        `bson:"password"`
+}
+
+//连接数据库
+func conMgo() *mgo.Session {
+	session,err := mgo.Dial("172.17.0.2:27017")
+	if err != nil {
+		return nil
+	}
+	return session
+}
+
+func conMgoDb(database string,collection string,session *mgo.Session) *mgo.Collection{
+	c := session.DB(database).C(collection)
+	return c
+}
+
+func findData(c *mgo.Collection,user H) (User,error) {
+	res := User{}
+	err := c.Find(bson.M{"username":user["username"]}).One(&res)
+	return res,err
+}
+
+func insertData(c *mgo.Collection,user H) bool {
+	err := c.Insert(user)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+func FindMongo(user H) string {
+	//buf, _ := json.Marshal(user)
+	//println(string(buf))
+	session := conMgo()
+	if session == nil {
+		return fmt.Sprint("数据库连接失败\n")
+	}
+	defer session.Close()
+	c := conMgoDb("mydb","user",session)
+	res,err := findData(c,user)
+	if err != nil {
+		return fmt.Sprintf("用户名错误\n")
+	} else if res.Passwd != user["password"] {
+		return fmt.Sprintf("密码错误\n")
+	} else {
+		c = conMgoDb("mydb","login",session)
+		_,err = findData(c,user)
+		if err == nil {
+			return fmt.Sprintf("该用户已登陆\n")
+		}else {
+			if insertData(c,user) {
+				return fmt.Sprintf("登陆成功\n")
+			}
+			return fmt.Sprintf("登陆失败\n")
+		}
+	}
+}
+
+func InsertMongo(nu H) string {
+	session := conMgo()
+	if session == nil {
+		return fmt.Sprint("数据库连接失败\n")
+	}
+	defer session.Close()
+	c := conMgoDb("mydb","user",session)
+	_,err := findData(c,nu)
+	if err == nil {
+		return fmt.Sprint("用户名重复\n")
+	}	
+	if insertData(c,nu) {
+		return fmt.Sprint("注册成功\n")
+	}
+	return fmt.Sprint("注册失败\n")
+}
